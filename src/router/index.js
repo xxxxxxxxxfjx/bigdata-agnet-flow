@@ -17,7 +17,7 @@ const routes = [
     path: '/workflow/:id',
     name: 'Workflow',
     component: () => import('../pages/WorkflowEditor.vue'),
-    meta: { title: '工作流编排' },
+    meta: { title: '工作流编辑器' },
     props: true,
   },
   {

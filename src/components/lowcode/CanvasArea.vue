@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useCanvas } from '../../composables/useCanvas.js'
 import { useAlignGuide } from '../../composables/useAlignGuide.js'
 import { useKeyboard } from '../../composables/useKeyboard.js'
@@ -10,12 +10,13 @@ const props = defineProps({
   scale: { type: Number, default: 1 },
 })
 
-const emit = defineEmits(['canvas-click', 'component-mutated', 'update-scale', 'update-pan'])
+const emit = defineEmits(['canvas-click', 'component-mutated', 'update-scale'])
 
 const {
   components,
   selectedId,
   selectedIds,
+  clipboard,
   canvasStyle,
   addComponent,
   removeComponent,
@@ -34,17 +35,39 @@ const {
   duplicateComponent,
 } = useCanvas()
 
-const { guides, computeGuides, clearGuides, alignComponents } = useAlignGuide()
+const { guides, computeGuides, clearGuides } = useAlignGuide()
 
 const canvasRef = ref(null)
-
-// Context menu
 const contextMenu = ref({ visible: false, x: 0, y: 0, targetId: null })
-
-// Box selection
 const boxSelect = ref({ active: false, startX: 0, startY: 0, x: 0, y: 0, w: 0, h: 0 })
+const isPanning = ref(false)
+const spaceHeld = ref(false)
 
-// Drop handler
+const sortedComponents = computed(() => [...components.value].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)))
+const bgStyle = computed(() => {
+  const bg = canvasStyle.value.background
+  if (bg && (bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient') || bg.startsWith('#'))) {
+    return { background: bg }
+  }
+  return { background: '#0f172a' }
+})
+
+const canvasMenuItems = computed(() => [
+  { label: '全选', icon: 'A', shortcut: 'Ctrl+A', action: () => selectAll() },
+  { label: '粘贴', icon: 'V', shortcut: 'Ctrl+V', action: ctxPaste, disabled: clipboard.value.length === 0 },
+])
+
+const componentMenuItems = computed(() => [
+  { label: '复制', icon: 'C', shortcut: 'Ctrl+C', action: () => copyToClipboard(selectedIds.value) },
+  { label: '粘贴', icon: 'V', shortcut: 'Ctrl+V', action: ctxPaste, disabled: clipboard.value.length === 0 },
+  { label: '复制并偏移', icon: 'D', shortcut: 'Ctrl+D', action: ctxDuplicate },
+  { divider: true },
+  { label: '置顶', icon: '↑', action: () => selectedId.value && bringToFront(selectedId.value) },
+  { label: '置底', icon: '↓', action: () => selectedId.value && sendToBack(selectedId.value) },
+  { divider: true },
+  { label: '删除', icon: '×', shortcut: 'Del', action: ctxDelete, danger: true },
+])
+
 function onDragOver(e) {
   e.preventDefault()
   e.dataTransfer.dropEffect = 'move'
@@ -55,37 +78,31 @@ function onDrop(e) {
   if (!type) return
   const bounds = canvasRef.value?.getBoundingClientRect()
   if (!bounds) return
-  const x = (e.clientX - bounds.left) / props.scale
-  const y = (e.clientY - bounds.top) / props.scale
-  addComponent(type, x, y)
+  addComponent(type, (e.clientX - bounds.left) / props.scale, (e.clientY - bounds.top) / props.scale)
   emit('component-mutated')
 }
 
-// Selection
 function onCanvasMouseDown(e) {
-  // Middle-click or space+left-click = pan
   if (e.button === 1 || (e.button === 0 && spaceHeld.value)) {
     e.preventDefault()
     panStartDrag(e)
     return
   }
   if (e.target !== canvasRef.value && !e.target.classList.contains('canvas-surface')) return
-  if (e.button !== 0) return // Left click only
+  if (e.button !== 0) return
 
   const bounds = canvasRef.value.getBoundingClientRect()
-  const x = (e.clientX - bounds.left) / props.scale
-  const y = (e.clientY - bounds.top) / props.scale
-
-  // Start box selection
-  boxSelect.value = { active: true, startX: x, startY: y, x, y, w: 0, h: 0 }
+  const startX = (e.clientX - bounds.left) / props.scale
+  const startY = (e.clientY - bounds.top) / props.scale
+  boxSelect.value = { active: true, startX, startY, x: startX, y: startY, w: 0, h: 0 }
 
   const onMove = (ev) => {
     const cx = (ev.clientX - bounds.left) / props.scale
     const cy = (ev.clientY - bounds.top) / props.scale
-    boxSelect.value.x = Math.min(boxSelect.value.startX, cx)
-    boxSelect.value.y = Math.min(boxSelect.value.startY, cy)
-    boxSelect.value.w = Math.abs(cx - boxSelect.value.startX)
-    boxSelect.value.h = Math.abs(cy - boxSelect.value.startY)
+    boxSelect.value.x = Math.min(startX, cx)
+    boxSelect.value.y = Math.min(startY, cy)
+    boxSelect.value.w = Math.abs(cx - startX)
+    boxSelect.value.h = Math.abs(cy - startY)
   }
 
   const onUp = () => {
@@ -93,6 +110,7 @@ function onCanvasMouseDown(e) {
       selectInRect(boxSelect.value)
     } else {
       deselectComponent()
+      emit('canvas-click')
     }
     boxSelect.value.active = false
     boxSelect.value.w = 0
@@ -105,37 +123,23 @@ function onCanvasMouseDown(e) {
   document.addEventListener('mouseup', onUp)
 }
 
-// --- Wheel zoom ---
 function onWheel(e) {
   e.preventDefault()
   const delta = e.deltaY > 0 ? -0.06 : 0.06
-  const newScale = Math.max(0.25, Math.min(2, props.scale + delta))
-  emit('update-scale', Math.round(newScale * 100) / 100)
+  emit('update-scale', Math.round(Math.max(0.25, Math.min(2, props.scale + delta)) * 100) / 100)
 }
 
-// --- Middle-click / Space+drag pan ---
-const isPanning = ref(false)
-const spaceHeld = ref(false)
-
 function onKeyDown(e) {
-  if (e.code === 'Space' && !['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) && !e.repeat) {
+  if (e.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.repeat) {
     e.preventDefault()
     spaceHeld.value = true
   }
 }
+
 function onKeyUp(e) {
   if (e.code === 'Space') spaceHeld.value = false
 }
-onMounted(() => {
-  document.addEventListener('keydown', onKeyDown)
-  document.addEventListener('keyup', onKeyUp)
-})
-onUnmounted(() => {
-  document.removeEventListener('keydown', onKeyDown)
-  document.removeEventListener('keyup', onKeyUp)
-})
 
-// Pan drag handler
 function panStartDrag(e) {
   isPanning.value = true
   const scrollEl = canvasRef.value?.parentElement
@@ -146,21 +150,20 @@ function panStartDrag(e) {
 
   const onMove = (ev) => {
     const el = canvasRef.value?.parentElement
-    if (el) {
-      el.scrollLeft = startSX - (ev.clientX - startX)
-      el.scrollTop = startSY - (ev.clientY - startY)
-    }
+    if (!el) return
+    el.scrollLeft = startSX - (ev.clientX - startX)
+    el.scrollTop = startSY - (ev.clientY - startY)
   }
   const onUp = () => {
     isPanning.value = false
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
+
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
 
-// Middle-click pan on canvas area (outside canvas surface)
 function onCanvasMouseDownPan(e) {
   if (e.button === 1 || (e.button === 0 && spaceHeld.value)) {
     e.preventDefault()
@@ -169,20 +172,24 @@ function onCanvasMouseDownPan(e) {
 }
 
 function onShapeSelect(id, e) {
-  const multi = e?.ctrlKey || e?.metaKey
-  selectComponent(id, multi)
+  selectComponent(id, e?.ctrlKey || e?.metaKey)
 }
 
-// Mutations
 function onPositionUpdate(id, x, y) {
-  // Compute alignment guides
   const comp = components.value.find((c) => c.id === id)
-  if (comp) {
-    const snap = computeGuides({ x, y, w: comp.w, h: comp.h }, components.value, id)
-    updatePosition(id, snap.x, snap.y)
-  } else {
-    updatePosition(id, x, y)
-  }
+  if (!comp) return updatePosition(id, x, y)
+  const snap = computeGuides({ x, y, w: comp.w, h: comp.h }, components.value, id)
+  updatePosition(id, snap.x, snap.y)
+}
+
+function onBoundsUpdate(id, x, y, w, h) {
+  const comp = components.value.find((c) => c.id === id)
+  if (!comp) return
+  const snap = computeGuides({ x, y, w, h }, components.value, id)
+  comp.x = Math.round(snap.x)
+  comp.y = Math.round(snap.y)
+  comp.w = Math.max(50, Math.round(w))
+  comp.h = Math.max(50, Math.round(h))
 }
 
 function onDragEnd() {
@@ -190,71 +197,32 @@ function onDragEnd() {
   emit('component-mutated')
 }
 
-function onSizeUpdate(id, w, h) {
-  updateSize(id, w, h)
-}
-
-function onBoundsUpdate(id, x, y, w, h) {
-  const comp = components.value.find((c) => c.id === id)
-  if (comp) {
-    const snap = computeGuides({ x, y, w, h }, components.value, id)
-    comp.x = Math.round(snap.x)
-    comp.y = Math.round(snap.y)
-    comp.w = Math.max(50, Math.round(w))
-    comp.h = Math.max(50, Math.round(h))
-  }
-}
-
 function onDelete(id) {
   removeComponent(id)
   emit('component-mutated')
 }
 
-function onMutation() {
-  emit('component-mutated')
-}
-
-// Context menu handlers
 function onCanvasContextMenu(e) {
   e.preventDefault()
-  const bounds = canvasRef.value?.getBoundingClientRect()
-  contextMenu.value = {
-    visible: true,
-    x: e.clientX,
-    y: e.clientY,
-    targetId: null,
-  }
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, targetId: null }
 }
 
 function onShapeContextMenu(id, e) {
   e.preventDefault()
   e.stopPropagation()
-  // Ensure this component is selected
-  if (!selectedIds.value.includes(id)) {
-    selectComponent(id)
-  }
-  contextMenu.value = {
-    visible: true,
-    x: e.clientX,
-    y: e.clientY,
-    targetId: id,
-  }
+  if (!selectedIds.value.includes(id)) selectComponent(id)
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, targetId: id }
 }
 
 function closeContextMenu() {
   contextMenu.value.visible = false
 }
 
-// Context menu actions
 function ctxDelete() {
   if (selectedIds.value.length > 0) {
     deleteSelected()
     emit('component-mutated')
   }
-}
-
-function ctxCopy() {
-  copyToClipboard(selectedIds.value)
 }
 
 function ctxPaste() {
@@ -269,19 +237,6 @@ function ctxDuplicate() {
   }
 }
 
-function ctxBringFront() {
-  if (selectedId.value) bringToFront(selectedId.value)
-}
-
-function ctxSendBack() {
-  if (selectedId.value) sendToBack(selectedId.value)
-}
-
-function ctxSelectAll() {
-  selectAll()
-}
-
-// Keyboard shortcuts
 useKeyboard({
   onDelete: () => {
     if (selectedIds.value.length > 0) {
@@ -290,17 +245,9 @@ useKeyboard({
     }
   },
   onCopy: () => copyToClipboard(selectedIds.value),
-  onPaste: () => {
-    pasteFromClipboard()
-    emit('component-mutated')
-  },
+  onPaste: ctxPaste,
   onSelectAll: () => selectAll(),
-  onDuplicate: () => {
-    if (selectedId.value) {
-      duplicateComponent(selectedId.value)
-      emit('component-mutated')
-    }
-  },
+  onDuplicate: ctxDuplicate,
   onEscape: () => deselectComponent(),
   onArrowUp: (step) => moveSelectedComponents(0, -step),
   onArrowDown: (step) => moveSelectedComponents(0, step),
@@ -308,44 +255,19 @@ useKeyboard({
   onArrowRight: (step) => moveSelectedComponents(step, 0),
 })
 
-// Build context menu items
-const canvasMenuItems = computed(() => [
-  { label: '全选', icon: '☐', shortcut: 'Ctrl+A', action: ctxSelectAll },
-  { label: '粘贴', icon: '📋', shortcut: 'Ctrl+V', action: ctxPaste, disabled: useCanvas().clipboard.value.length === 0 },
-])
-
-const componentMenuItems = computed(() => [
-  { label: '复制', icon: '📋', shortcut: 'Ctrl+C', action: ctxCopy },
-  { label: '粘贴', icon: '📋', shortcut: 'Ctrl+V', action: ctxPaste, disabled: useCanvas().clipboard.value.length === 0 },
-  { label: '复制并偏移', icon: '📄', shortcut: 'Ctrl+D', action: ctxDuplicate },
-  { divider: true },
-  { label: '置顶', icon: '⬆', action: ctxBringFront },
-  { label: '置底', icon: '⬇', action: ctxSendBack },
-  { divider: true },
-  { label: '删除', icon: '🗑️', shortcut: 'Del', action: ctxDelete, danger: true },
-])
-
-// Sort components
-const sortedComponents = computed(() => {
-  return [...components.value].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+onMounted(() => {
+  document.addEventListener('keydown', onKeyDown)
+  document.addEventListener('keyup', onKeyUp)
 })
 
-const bgStyle = computed(() => {
-  const bg = canvasStyle.value.background
-  if (bg && (bg.startsWith('linear-gradient') || bg.startsWith('radial-gradient') || bg.startsWith('#'))) {
-    return { background: bg }
-  }
-  return { background: '#0f172a' }
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('keyup', onKeyUp)
 })
 </script>
 
 <template>
-  <div
-    class="canvas-area"
-    :class="{ panning: spaceHeld }"
-    @wheel.prevent="onWheel"
-    @mousedown="onCanvasMouseDownPan"
-  >
+  <div class="canvas-area" :class="{ panning: spaceHeld || isPanning }" @wheel.prevent="onWheel" @mousedown="onCanvasMouseDownPan">
     <div class="canvas-scroll">
       <div
         ref="canvasRef"
@@ -362,47 +284,37 @@ const bgStyle = computed(() => {
         @mousedown="onCanvasMouseDown"
         @contextmenu="onCanvasContextMenu"
       >
-        <!-- Grid overlay -->
         <svg v-if="canvasStyle.showGrid" class="canvas-grid" :width="canvasStyle.width" :height="canvasStyle.height">
           <defs>
-            <pattern id="canvasGridPattern" :width="canvasStyle.gridSize||10" :height="canvasStyle.gridSize||10" patternUnits="userSpaceOnUse">
-              <path :d="`M ${canvasStyle.gridSize||10} 0 L 0 0 0 ${canvasStyle.gridSize||10}`" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+            <pattern id="canvasGridPattern" :width="canvasStyle.gridSize || 10" :height="canvasStyle.gridSize || 10" patternUnits="userSpaceOnUse">
+              <path :d="`M ${canvasStyle.gridSize || 10} 0 L 0 0 0 ${canvasStyle.gridSize || 10}`" fill="none" stroke="rgba(255,255,255,0.045)" stroke-width="0.5" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#canvasGridPattern)"/>
+          <rect width="100%" height="100%" fill="url(#canvasGridPattern)" />
         </svg>
 
-        <!-- Resolution marker -->
-        <div class="canvas-marker">{{ canvasStyle.width }} × {{ canvasStyle.height }}</div>
+        <div class="canvas-marker">{{ canvasStyle.width }} x {{ canvasStyle.height }}</div>
 
-        <!-- Alignment guides -->
         <svg v-if="guides.length > 0" class="align-guides-svg" :width="canvasStyle.width" :height="canvasStyle.height">
           <line
             v-for="(g, i) in guides"
-            :key="'g'+i"
-            :x1="g.type==='v'?g.position:g.range[0]"
-            :y1="g.type==='h'?g.position:g.range[0]"
-            :x2="g.type==='v'?g.position:g.range[1]"
-            :y2="g.type==='h'?g.position:g.range[1]"
-            stroke="#6366f1"
+            :key="i"
+            :x1="g.type === 'v' ? g.position : g.range[0]"
+            :y1="g.type === 'h' ? g.position : g.range[0]"
+            :x2="g.type === 'v' ? g.position : g.range[1]"
+            :y2="g.type === 'h' ? g.position : g.range[1]"
+            stroke="#38bdf8"
             stroke-width="1"
             stroke-dasharray="4,2"
           />
         </svg>
 
-        <!-- Box selection rect -->
         <div
           v-if="boxSelect.active && boxSelect.w > 3 && boxSelect.h > 3"
           class="box-selection"
-          :style="{
-            left: boxSelect.x + 'px',
-            top: boxSelect.y + 'px',
-            width: boxSelect.w + 'px',
-            height: boxSelect.h + 'px',
-          }"
+          :style="{ left: boxSelect.x + 'px', top: boxSelect.y + 'px', width: boxSelect.w + 'px', height: boxSelect.h + 'px' }"
         ></div>
 
-        <!-- Components -->
         <Shape
           v-for="comp in sortedComponents"
           :key="comp.id"
@@ -411,24 +323,21 @@ const bgStyle = computed(() => {
           :scale="scale"
           @select="onShapeSelect"
           @update-position="onPositionUpdate"
-          @update-size="onSizeUpdate"
+          @update-size="updateSize"
           @update-bounds="onBoundsUpdate"
           @delete="onDelete"
-          @mutation="onMutation"
+          @mutation="emit('component-mutated')"
           @drag-end="onDragEnd"
           @contextmenu="onShapeContextMenu"
         />
 
-        <!-- Empty hint -->
         <div v-if="components.length === 0" class="canvas-hint">
-          <div class="hint-icon">📊</div>
-          <div class="hint-text">从左侧拖拽组件到此处</div>
-          <div class="hint-sub">右键查看更多操作 · 设计尺寸: {{ canvasStyle.width }} × {{ canvasStyle.height }}</div>
+          <div class="hint-title">拖入图表开始搭建</div>
+          <div class="hint-sub">支持组件库拖拽、右键菜单、框选、多选对齐、滚轮缩放和空格拖动画布</div>
         </div>
       </div>
     </div>
 
-    <!-- Context Menu -->
     <ContextMenu
       :visible="contextMenu.visible"
       :x="contextMenu.x"
@@ -444,64 +353,55 @@ const bgStyle = computed(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #1e293b;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95)),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(148, 163, 184, 0.06) 24px),
+    repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(148, 163, 184, 0.06) 24px);
 }
 
-/* Space-held = pan mode */
 .canvas-area.panning {
   cursor: grab;
-}
-.canvas-area.panning:active {
-  cursor: grabbing;
 }
 
 .canvas-scroll {
   width: 100%;
   height: 100%;
   overflow: auto;
-  padding: 24px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  padding: 28px;
 }
 
 .canvas-surface {
   position: relative;
   flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 18px 60px rgba(0,0,0,0.42);
   user-select: none;
 }
 
-.canvas-grid {
+.canvas-grid,
+.align-guides-svg {
   position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
-.canvas-marker {
-  position: absolute;
-  bottom: 4px;
-  right: 8px;
-  font-size: 10px;
-  color: rgba(255,255,255,0.2);
-  font-family: monospace;
+  inset: 0;
   pointer-events: none;
 }
 
 .align-guides-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
   z-index: 999;
+}
+
+.canvas-marker {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  color: rgba(255,255,255,0.26);
+  font: 11px Consolas, Monaco, monospace;
+  pointer-events: none;
 }
 
 .box-selection {
   position: absolute;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px dashed #6366f1;
   z-index: 998;
+  border: 1px dashed #38bdf8;
+  background: rgba(56, 189, 248, 0.16);
   pointer-events: none;
 }
 
@@ -510,11 +410,25 @@ const bgStyle = computed(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  width: 520px;
+  max-width: 80%;
+  padding: 28px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
   text-align: center;
+  background: rgba(15, 23, 42, 0.35);
   pointer-events: none;
 }
 
-.hint-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.4; }
-.hint-text { font-size: 16px; color: #64748b; margin-bottom: 6px; }
-.hint-sub { font-size: 12px; color: #475569; }
+.hint-title {
+  color: #e2e8f0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.hint-sub {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
 </style>

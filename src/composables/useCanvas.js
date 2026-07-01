@@ -48,13 +48,15 @@ export function useCanvas() {
     }
     components.value = [...components.value, component]
     selectedId.value = id
+    selectedIds.value = [id]
     return component
   }
 
   function removeComponent(id) {
     components.value = components.value.filter((c) => c.id !== id)
+    selectedIds.value = selectedIds.value.filter((selected) => selected !== id)
     if (selectedId.value === id) {
-      selectedId.value = null
+      selectedId.value = selectedIds.value[0] || null
     }
   }
 
@@ -230,6 +232,7 @@ export function useCanvas() {
     }
     components.value = [...components.value, newComp]
     selectedId.value = newId
+    selectedIds.value = [newId]
     return newComp
   }
 
@@ -270,6 +273,7 @@ export function useCanvas() {
   function clearCanvas() {
     components.value = []
     selectedId.value = null
+    selectedIds.value = []
   }
 
   function exportCanvas() {
@@ -292,6 +296,7 @@ export function useCanvas() {
         components.value = data.components
         canvasStyle.value = { ...canvasStyle.value, ...data.canvasStyle }
         selectedId.value = null
+        selectedIds.value = []
         return true
       }
       return false

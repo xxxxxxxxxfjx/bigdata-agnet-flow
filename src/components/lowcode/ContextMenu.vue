@@ -13,6 +13,10 @@ const emit = defineEmits(['close'])
 
 const menuRef = ref(null)
 
+function closeMenu() {
+  emit('close')
+}
+
 function onItemClick(item) {
   if (item.disabled) return
   item.action?.()
@@ -25,11 +29,11 @@ function onMouseDown(e) {
 }
 
 onMounted(() => {
-  document.addEventListener('click', () => emit('close'))
+  document.addEventListener('click', closeMenu)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', () => emit('close'))
+  document.removeEventListener('click', closeMenu)
 })
 </script>
 

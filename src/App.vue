@@ -1,13 +1,13 @@
 <script setup>
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 
 const navItems = [
-  { path: '/', label: '首页', icon: '🏠' },
-  { path: '/workflows', label: '工作流', icon: '⚡' },
-  { path: '/lowcode', label: '大屏', icon: '📊' },
+  { path: '/', label: '首页', icon: '⌂' },
+  { path: '/workflows', label: '工作流', icon: '⚙' },
+  { path: '/lowcode', label: '大屏', icon: '▦' },
 ]
 </script>
 
@@ -15,10 +15,10 @@ const navItems = [
   <div class="app-layout">
     <header class="app-header">
       <div class="header-left">
-        <div class="logo" @click="router.push('/')" style="cursor: pointer;">
-          <span class="logo-icon">⚡</span>
+        <button class="logo" @click="router.push('/')">
+          <span class="logo-icon">◆</span>
           <span class="logo-text">BigData Agent Flow</span>
-        </div>
+        </button>
         <nav class="header-nav">
           <button
             v-for="item in navItems"
@@ -28,13 +28,11 @@ const navItems = [
             @click="router.push(item.path)"
           >
             <span class="nav-icon">{{ item.icon }}</span>
-            <span class="nav-label">{{ item.label }}</span>
+            <span>{{ item.label }}</span>
           </button>
         </nav>
       </div>
-      <div class="header-center">
-        <span class="project-name">大数据Agent工作流编排平台</span>
-      </div>
+      <div class="header-center">大数据 Agent 工作流与可视化大屏平台</div>
       <div class="header-right">
         <span class="version-badge">v0.1.0</span>
       </div>
@@ -51,135 +49,125 @@ const navItems = [
 
 <style scoped>
 .app-layout {
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100vw;
   overflow: hidden;
 }
 
 .app-header {
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 52px;
-  padding: 0 20px;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
+  padding: 0 18px;
+  background: #ffffff;
+  border-bottom: 1px solid #dbe3ef;
   z-index: 100;
 }
 
-.header-left {
+.header-left,
+.header-right,
+.header-nav,
+.logo,
+.nav-btn {
   display: flex;
   align-items: center;
-  gap: 24px;
+}
+
+.header-left {
+  gap: 22px;
 }
 
 .logo {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  user-select: none;
+  padding: 0;
+  color: #0f172a;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
 }
 
 .logo-icon {
-  font-size: 22px;
+  color: #2563eb;
+  font-size: 16px;
 }
 
 .logo-text {
   font-size: 15px;
-  font-weight: 700;
-  color: #1e293b;
-  letter-spacing: -0.3px;
+  font-weight: 800;
 }
 
 .header-nav {
-  display: flex;
-  align-items: center;
   gap: 4px;
 }
 
 .nav-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 6px;
   color: #64748b;
   background: transparent;
-  border: none;
-  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .nav-btn:hover {
-  color: #334155;
+  color: #0f172a;
   background: #f1f5f9;
 }
 
 .nav-btn.active {
-  color: #6366f1;
-  background: #eef2ff;
+  color: #2563eb;
+  background: #eff6ff;
 }
 
 .nav-icon {
   font-size: 14px;
-  line-height: 1;
-}
-
-.nav-label {
-  font-size: 13px;
 }
 
 .header-center {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-}
-
-.project-name {
-  font-size: 14px;
-  font-weight: 500;
   color: #64748b;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .version-badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  background: #f1f5f9;
   padding: 3px 10px;
-  border-radius: 10px;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f1f5f9;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .app-main {
   display: flex;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* Page transition */
 .page-fade-enter-active,
 .page-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(4px);
 }
 
 .page-fade-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-4px);
 }
 </style>
