@@ -116,7 +116,7 @@ export function useWorkflow() {
   function importWorkflow(jsonStr) {
     try {
       const data = JSON.parse(jsonStr)
-      if (data.nodes && data.edges) {
+      if (data.nodes !== undefined && data.edges !== undefined) {
         nodes.value = data.nodes
         edges.value = data.edges
         selectedNodeId.value = null
@@ -125,6 +125,24 @@ export function useWorkflow() {
       return false
     } catch {
       return false
+    }
+  }
+
+  function loadWorkflow(workflowData) {
+    if (!workflowData) return false
+    if (workflowData.nodes && workflowData.edges) {
+      nodes.value = JSON.parse(JSON.stringify(workflowData.nodes))
+      edges.value = JSON.parse(JSON.stringify(workflowData.edges))
+      selectedNodeId.value = null
+      return true
+    }
+    return false
+  }
+
+  function getWorkflowSnapshot() {
+    return {
+      nodes: JSON.parse(JSON.stringify(nodes.value)),
+      edges: JSON.parse(JSON.stringify(edges.value)),
     }
   }
 
@@ -145,5 +163,7 @@ export function useWorkflow() {
     clearCanvas,
     exportWorkflow,
     importWorkflow,
+    loadWorkflow,
+    getWorkflowSnapshot,
   }
 }

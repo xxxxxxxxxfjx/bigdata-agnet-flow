@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCanvas } from '../../composables/useCanvas.js'
 import { useAlignGuide } from '../../composables/useAlignGuide.js'
 import { useKeyboard } from '../../composables/useKeyboard.js'
@@ -10,7 +10,7 @@ const props = defineProps({
   scale: { type: Number, default: 1 },
 })
 
-const emit = defineEmits(['canvas-click', 'component-mutated'])
+const emit = defineEmits(['canvas-click', 'component-mutated', 'update-scale', 'update-pan'])
 
 const {
   components,
@@ -63,6 +63,12 @@ function onDrop(e) {
 
 // Selection
 function onCanvasMouseDown(e) {
+  // Middle-click or space+left-click = pan
+  if (e.button === 1 || (e.button === 0 && spaceHeld.value)) {
+    e.preventDefault()
+    panStartDrag(e)
+    return
+  }
   if (e.target !== canvasRef.value && !e.target.classList.contains('canvas-surface')) return
   if (e.button !== 0) return // Left click only
 
@@ -99,6 +105,69 @@ function onCanvasMouseDown(e) {
   document.addEventListener('mouseup', onUp)
 }
 
+// --- Wheel zoom ---
+function onWheel(e) {
+  e.preventDefault()
+  const delta = e.deltaY > 0 ? -0.06 : 0.06
+  const newScale = Math.max(0.25, Math.min(2, props.scale + delta))
+  emit('update-scale', Math.round(newScale * 100) / 100)
+}
+
+// --- Middle-click / Space+drag pan ---
+const isPanning = ref(false)
+const spaceHeld = ref(false)
+
+function onKeyDown(e) {
+  if (e.code === 'Space' && !['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) && !e.repeat) {
+    e.preventDefault()
+    spaceHeld.value = true
+  }
+}
+function onKeyUp(e) {
+  if (e.code === 'Space') spaceHeld.value = false
+}
+onMounted(() => {
+  document.addEventListener('keydown', onKeyDown)
+  document.addEventListener('keyup', onKeyUp)
+})
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('keyup', onKeyUp)
+})
+
+// Pan drag handler
+function panStartDrag(e) {
+  isPanning.value = true
+  const scrollEl = canvasRef.value?.parentElement
+  const startX = e.clientX
+  const startY = e.clientY
+  const startSX = scrollEl?.scrollLeft || 0
+  const startSY = scrollEl?.scrollTop || 0
+
+  const onMove = (ev) => {
+    const el = canvasRef.value?.parentElement
+    if (el) {
+      el.scrollLeft = startSX - (ev.clientX - startX)
+      el.scrollTop = startSY - (ev.clientY - startY)
+    }
+  }
+  const onUp = () => {
+    isPanning.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+// Middle-click pan on canvas area (outside canvas surface)
+function onCanvasMouseDownPan(e) {
+  if (e.button === 1 || (e.button === 0 && spaceHeld.value)) {
+    e.preventDefault()
+    panStartDrag(e)
+  }
+}
+
 function onShapeSelect(id, e) {
   const multi = e?.ctrlKey || e?.metaKey
   selectComponent(id, multi)
@@ -123,6 +192,17 @@ function onDragEnd() {
 
 function onSizeUpdate(id, w, h) {
   updateSize(id, w, h)
+}
+
+function onBoundsUpdate(id, x, y, w, h) {
+  const comp = components.value.find((c) => c.id === id)
+  if (comp) {
+    const snap = computeGuides({ x, y, w, h }, components.value, id)
+    comp.x = Math.round(snap.x)
+    comp.y = Math.round(snap.y)
+    comp.w = Math.max(50, Math.round(w))
+    comp.h = Math.max(50, Math.round(h))
+  }
 }
 
 function onDelete(id) {
@@ -260,7 +340,12 @@ const bgStyle = computed(() => {
 </script>
 
 <template>
-  <div class="canvas-area">
+  <div
+    class="canvas-area"
+    :class="{ panning: spaceHeld }"
+    @wheel.prevent="onWheel"
+    @mousedown="onCanvasMouseDownPan"
+  >
     <div class="canvas-scroll">
       <div
         ref="canvasRef"
@@ -327,6 +412,7 @@ const bgStyle = computed(() => {
           @select="onShapeSelect"
           @update-position="onPositionUpdate"
           @update-size="onSizeUpdate"
+          @update-bounds="onBoundsUpdate"
           @delete="onDelete"
           @mutation="onMutation"
           @drag-end="onDragEnd"
@@ -359,6 +445,14 @@ const bgStyle = computed(() => {
   position: relative;
   overflow: hidden;
   background: #1e293b;
+}
+
+/* Space-held = pan mode */
+.canvas-area.panning {
+  cursor: grab;
+}
+.canvas-area.panning:active {
+  cursor: grabbing;
 }
 
 .canvas-scroll {

@@ -8,10 +8,21 @@ const routes = [
     meta: { title: '首页' },
   },
   {
-    path: '/workflow',
+    path: '/workflows',
+    name: 'WorkflowList',
+    component: () => import('../pages/WorkflowList.vue'),
+    meta: { title: '工作流列表' },
+  },
+  {
+    path: '/workflow/:id',
     name: 'Workflow',
     component: () => import('../pages/WorkflowEditor.vue'),
     meta: { title: '工作流编排' },
+    props: true,
+  },
+  {
+    path: '/workflow',
+    redirect: '/workflows',
   },
   {
     path: '/lowcode',

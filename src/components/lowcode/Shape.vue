@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, toRef } from 'vue'
 import ChartRenderer from './ChartRenderer.vue'
+import { useDataBinding } from '../../composables/useDataBinding.js'
 
 const props = defineProps({
   component: { type: Object, required: true },
@@ -8,7 +9,11 @@ const props = defineProps({
   scale: { type: Number, default: 1 },
 })
 
-const emit = defineEmits(['select', 'update-position', 'update-size', 'delete', 'mutation', 'drag-end', 'contextmenu'])
+const emit = defineEmits(['select', 'update-position', 'update-size', 'update-bounds', 'delete', 'mutation', 'drag-end', 'contextmenu'])
+
+// Wire data binding to ChartRenderer
+const componentRef = toRef(props, 'component')
+const { data: boundData, loading: dataLoading } = useDataBinding(componentRef)
 
 // Drag state
 const isDragging = ref(false)
@@ -96,10 +101,8 @@ function onResizeMove(e) {
   w = Math.max(50, w)
   newH = Math.max(50, newH)
 
-  emit('update-size', props.component.id, snap(w), snap(newH))
-
-  if (h.includes('w')) emit('update-position', props.component.id, snap(x), props.component.y)
-  if (h.includes('n')) emit('update-position', props.component.id, props.component.x, snap(y))
+  // Atomic position+size update — fixes jitter on corner resizes
+  emit('update-bounds', props.component.id, snap(x), snap(y), snap(w), snap(newH))
 }
 
 function onResizeEnd() {
@@ -150,6 +153,8 @@ function onDelete(e) {
         :config="component.data?.config || {}"
         :width="component.w"
         :height="component.h"
+        :external-data="boundData"
+        :loading="dataLoading"
       />
     </div>
 
@@ -173,6 +178,11 @@ function onDelete(e) {
         @mousedown="onResizeMouseDown($event, handle)"
       ></div>
     </template>
+
+    <!-- Locked indicator -->
+    <div v-if="component.locked" class="lock-overlay" title="已锁定">
+      <span>🔒</span>
+    </div>
 
     <!-- Selection border -->
     <div v-if="selected" class="selection-border"></div>
@@ -207,6 +217,20 @@ function onDelete(e) {
 .shape-content {
   position: relative;
   overflow: hidden;
+}
+
+/* Lock overlay */
+.lock-overlay {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+  opacity: 0.6;
+  z-index: 9;
+  pointer-events: none;
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 4px;
+  padding: 2px 4px;
 }
 
 /* Selection border */

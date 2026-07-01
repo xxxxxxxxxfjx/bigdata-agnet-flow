@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
@@ -12,8 +12,28 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
+const now = ref(new Date())
 let chartInstance = null
 let resizeObserver = null
+let clockTimer = null
+
+// Real-time clock for dateTime component
+if (props.type === 'dateTime') {
+  clockTimer = setInterval(() => { now.value = new Date() }, 1000)
+}
+
+onBeforeUnmount(() => {
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null }
+})
+
+// Stable hash function for word cloud (replaces Math.random)
+function hashStr(str, seed = 0) {
+  let h = seed
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0
+  }
+  return Math.abs(h)
+}
 
 // ECharts theme color palettes
 const themes = {
@@ -392,10 +412,10 @@ onUnmounted(() => {
           :key="i"
           class="word-tag"
           :style="{
-            fontSize: (12 + Math.random() * 24) + 'px',
-            opacity: 0.4 + Math.random() * 0.6,
-            color: ['#5470c6','#91cc75','#fac858','#ee6666','#73c0de','#fc8452','#8b5cf6','#06b6d4'][i % 8],
-            transform: `rotate(${(Math.random() - 0.5) * 40}deg)`,
+            fontSize: (12 + (hashStr(word, i * 7) % 24)) + 'px',
+            opacity: 0.45 + (hashStr(word, i * 13) % 55) / 100,
+            color: ['#5470c6','#91cc75','#fac858','#ee6666','#73c0de','#fc8452','#8b5cf6','#06b6d4'][hashStr(word, 42) % 8],
+            transform: `rotate(${((hashStr(word, i * 3) % 40) - 20)}deg)`,
           }"
         >
           {{ word.split(':')[0] || word }}
@@ -506,9 +526,9 @@ onUnmounted(() => {
         justifyContent: 'center',
       }"
     >
-      <div v-if="config.showDate !== false" class="dt-date">{{ new Date().toLocaleDateString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit' }) }}</div>
-      <div v-if="config.showTime !== false" class="dt-time">{{ new Date().toLocaleTimeString('zh-CN', { hour12: false }) }}</div>
-      <div v-if="config.showWeek !== false" class="dt-week">{{ ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][new Date().getDay()] }}</div>
+      <div v-if="config.showDate !== false" class="dt-date">{{ now.toLocaleDateString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit' }) }}</div>
+      <div v-if="config.showTime !== false" class="dt-time">{{ now.toLocaleTimeString('zh-CN', { hour12: false }) }}</div>
+      <div v-if="config.showWeek !== false" class="dt-week">{{ ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][now.getDay()] }}</div>
     </div>
 
     <!-- Table -->

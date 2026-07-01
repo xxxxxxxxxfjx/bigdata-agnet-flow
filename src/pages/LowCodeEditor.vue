@@ -38,6 +38,34 @@ const newProjectName = ref('')
 const editingProjectName = ref(null)
 const editNameValue = ref('')
 
+// Panel resize
+const leftPanelWidth = ref(260)
+const rightPanelWidth = ref(300)
+let resizePanelType = null
+
+function startResize(type, e) {
+  e.preventDefault()
+  resizePanelType = type
+  const startX = e.clientX
+  const startW = type === 'left' ? leftPanelWidth.value : rightPanelWidth.value
+
+  const onMove = (ev) => {
+    const dx = ev.clientX - startX
+    const newW = type === 'left'
+      ? Math.max(200, Math.min(500, startW + dx))
+      : Math.max(240, Math.min(500, startW - dx))
+    if (type === 'left') leftPanelWidth.value = newW
+    else rightPanelWidth.value = newW
+  }
+  const onUp = () => {
+    resizePanelType = null
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 // Create default project if none exists
 onMounted(() => {
   if (projects.value.length === 0) {
@@ -137,10 +165,12 @@ function handleImport() {
 }
 
 function handleClear() {
+  if (components.value.length === 0) return
+  if (!confirm(`确定要清空画布吗？将删除所有 ${components.value.length} 个组件，此操作可撤销。`)) return
+  snapshotBeforeMutate()
   components.value = []
   selectedId.value = null
   selectedIds.value = []
-  clearHistory()
 }
 
 function handlePreview() { showPreview.value = true }
@@ -294,13 +324,26 @@ function onComponentMutated() {
 
     <!-- Three-panel editor -->
     <div class="editor-body">
-      <ComponentPanel />
+      <div class="panel-left" :style="{ width: leftPanelWidth + 'px' }">
+        <ComponentPanel />
+      </div>
+      <div
+        class="panel-resize-handle"
+        @mousedown="startResize('left', $event)"
+      ></div>
       <CanvasArea
         :scale="canvasScale"
         @canvas-click="deselectComponent"
         @component-mutated="onComponentMutated"
+        @update-scale="(s) => canvasScale = s"
       />
-      <StylePanel />
+      <div
+        class="panel-resize-handle"
+        @mousedown="startResize('right', $event)"
+      ></div>
+      <div class="panel-right" :style="{ width: rightPanelWidth + 'px' }">
+        <StylePanel />
+      </div>
     </div>
 
     <!-- Modals -->
@@ -394,6 +437,23 @@ function onComponentMutated() {
 /* Layout */
 .lowcode-editor { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 .editor-body { display: flex; flex: 1; overflow: hidden; }
+
+.panel-left, .panel-right {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.panel-resize-handle {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  z-index: 50;
+}
+.panel-resize-handle:hover {
+  background: #c7d2fe;
+}
 
 /* Toolbar */
 .editor-toolbar {

@@ -1,8 +1,36 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { CHART_CATEGORIES, CHART_TYPE_CONFIG } from '../../config/chartTypes.js'
 
+const searchQuery = ref('')
 const expandedCategories = ref(CHART_CATEGORIES.map((c) => c.key))
+
+// Filter categories and nodes by search
+const filteredCategories = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return CHART_CATEGORIES.map((c) => ({
+    ...c,
+    filteredNodes: c.nodes,
+  }))
+
+  return CHART_CATEGORIES.map((c) => ({
+    ...c,
+    filteredNodes: c.nodes.filter((key) => {
+      const cfg = CHART_TYPE_CONFIG[key]
+      if (!cfg) return false
+      return cfg.label.toLowerCase().includes(q) ||
+        cfg.description.toLowerCase().includes(q) ||
+        key.toLowerCase().includes(q)
+    }),
+  })).filter((c) => c.filteredNodes.length > 0)
+})
+
+// Expand all matching categories when searching
+watch(searchQuery, (q) => {
+  if (q.trim()) {
+    expandedCategories.value = filteredCategories.value.map((c) => c.key)
+  }
+})
 
 function toggleCategory(key) {
   const idx = expandedCategories.value.indexOf(key)
@@ -24,11 +52,23 @@ function onDragStart(event, type) {
     <div class="panel-header">
       <h2>组件库</h2>
       <span class="panel-subtitle">拖拽组件到画布</span>
+      <div class="panel-search">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="搜索组件..."
+        />
+        <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</button>
+      </div>
     </div>
 
     <div class="panel-body">
+      <div v-if="filteredCategories.length === 0" class="no-results">
+        未找到匹配的组件
+      </div>
       <div
-        v-for="category in CHART_CATEGORIES"
+        v-for="category in filteredCategories"
         :key="category.key"
         class="category"
       >
@@ -41,7 +81,7 @@ function onDragStart(event, type) {
             :class="{ expanded: expandedCategories.includes(category.key) }"
           >▶</span>
           <span class="category-label">{{ category.label }}</span>
-          <span class="category-count">{{ category.nodes.length }}</span>
+          <span class="category-count">{{ category.filteredNodes.length }}</span>
         </div>
 
         <transition name="collapse">
@@ -50,7 +90,7 @@ function onDragStart(event, type) {
             class="category-nodes"
           >
             <div
-              v-for="nodeKey in category.nodes"
+              v-for="nodeKey in category.filteredNodes"
               :key="nodeKey"
               class="node-item"
               :style="{ '--item-color': CHART_TYPE_CONFIG[nodeKey]?.color }"
@@ -98,7 +138,50 @@ function onDragStart(event, type) {
   font-size: 12px;
   color: #94a3b8;
   margin-top: 4px;
+  margin-bottom: 10px;
   display: block;
+}
+
+.panel-search {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 7px 28px 7px 10px;
+  font-size: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fafbfc;
+  outline: none;
+  box-sizing: border-box;
+}
+.search-input:focus { border-color: #6366f1; }
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #cbd5e1;
+  border: none;
+  color: #fff;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-clear:hover { background: #94a3b8; }
+
+.no-results {
+  text-align: center;
+  padding: 24px;
+  font-size: 13px;
+  color: #94a3b8;
 }
 
 .panel-body {

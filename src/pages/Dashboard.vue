@@ -17,7 +17,7 @@ const platforms = [
       { icon: '🔗', label: '可视化连线', desc: '拖拽连线构建数据处理流程' },
       { icon: '💾', label: '导入/导出', desc: 'JSON 格式工作流持久化' },
     ],
-    route: '/workflow',
+    route: '/workflows',
     btnLabel: '进入工作流',
   },
   {

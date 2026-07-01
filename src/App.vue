@@ -6,7 +6,7 @@ const route = useRoute()
 
 const navItems = [
   { path: '/', label: '首页', icon: '🏠' },
-  { path: '/workflow', label: '工作流', icon: '⚡' },
+  { path: '/workflows', label: '工作流', icon: '⚡' },
   { path: '/lowcode', label: '大屏', icon: '📊' },
 ]
 </script>

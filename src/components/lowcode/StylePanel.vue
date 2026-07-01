@@ -528,7 +528,7 @@ function getDataPreview() {
                 <span class="layer-icon">{{ comp.data?.icon || '📊' }}</span>
                 <span class="layer-name">{{ comp.data?.label || comp.type }}</span>
                 <span class="layer-type">{{ comp.type }}</span>
-                <span class="layer-vis" @click.stop :title="comp.visible ? '可见' : '隐藏'">
+                <span class="layer-vis" @click.stop="comp.visible = comp.visible === false; comp.locked = comp.locked || false" :title="comp.visible !== false ? '点击隐藏' : '点击显示'">
                   {{ comp.visible !== false ? '👁️' : '🚫' }}
                 </span>
               </div>
@@ -577,8 +577,8 @@ function getDataPreview() {
 
 <style scoped>
 .style-panel {
-  width: 300px;
-  min-width: 300px;
+  width: 100%;
+  height: 100%;
   background: #ffffff;
   border-left: 1px solid #e2e8f0;
   display: flex;
@@ -590,10 +590,8 @@ function getDataPreview() {
 
 .style-panel.collapsed {
   width: 0;
-  min-width: 0;
   border-left: none;
-  opacity: 0;
-  pointer-events: none;
+  overflow: hidden;
 }
 
 /* Header */
