@@ -1,31 +1,50 @@
 <script setup>
-import NodePanel from './components/NodePanel.vue'
-import FlowCanvas from './components/FlowCanvas.vue'
-import ConfigPanel from './components/ConfigPanel.vue'
+import { useRouter, useRoute } from 'vue-router'
+
+const router = useRouter()
+const route = useRoute()
+
+const navItems = [
+  { path: '/', label: '首页', icon: '🏠' },
+  { path: '/workflow', label: '工作流', icon: '⚡' },
+  { path: '/lowcode', label: '大屏', icon: '📊' },
+]
 </script>
 
 <template>
   <div class="app-layout">
     <header class="app-header">
       <div class="header-left">
-        <div class="logo">
+        <div class="logo" @click="router.push('/')" style="cursor: pointer;">
           <span class="logo-icon">⚡</span>
           <span class="logo-text">BigData Agent Flow</span>
         </div>
+        <nav class="header-nav">
+          <button
+            v-for="item in navItems"
+            :key="item.path"
+            class="nav-btn"
+            :class="{ active: route.path === item.path }"
+            @click="router.push(item.path)"
+          >
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
+          </button>
+        </nav>
       </div>
       <div class="header-center">
-        <span class="project-name">大数据Agent工作流编排</span>
+        <span class="project-name">大数据Agent工作流编排平台</span>
       </div>
       <div class="header-right">
-        <button class="header-btn primary">
-          ▶ 运行
-        </button>
+        <span class="version-badge">v0.1.0</span>
       </div>
     </header>
     <main class="app-main">
-      <NodePanel />
-      <FlowCanvas />
-      <ConfigPanel />
+      <router-view v-slot="{ Component }">
+        <transition name="page-fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
   </div>
 </template>
@@ -54,12 +73,14 @@ import ConfigPanel from './components/ConfigPanel.vue'
 .header-left {
   display: flex;
   align-items: center;
+  gap: 24px;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 8px;
+  user-select: none;
 }
 
 .logo-icon {
@@ -71,6 +92,46 @@ import ConfigPanel from './components/ConfigPanel.vue'
   font-weight: 700;
   color: #1e293b;
   letter-spacing: -0.3px;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-btn:hover {
+  color: #334155;
+  background: #f1f5f9;
+}
+
+.nav-btn.active {
+  color: #6366f1;
+  background: #eef2ff;
+}
+
+.nav-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.nav-label {
+  font-size: 13px;
 }
 
 .header-center {
@@ -91,33 +152,34 @@ import ConfigPanel from './components/ConfigPanel.vue'
   gap: 10px;
 }
 
-.header-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.header-btn.primary {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-}
-
-.header-btn.primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+.version-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: #f1f5f9;
+  padding: 3px 10px;
+  border-radius: 10px;
 }
 
 .app-main {
   display: flex;
   flex: 1;
   overflow: hidden;
+}
+
+/* Page transition */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

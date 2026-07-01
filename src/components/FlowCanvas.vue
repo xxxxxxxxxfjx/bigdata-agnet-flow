@@ -122,11 +122,18 @@ function handleImport() {
       @pane-click="onPaneClick"
       @edge-double-click="onEdgeDoubleClick"
     >
-      <Background pattern-color="#e2e8f0" :size="1" :gap="20" />
+      <Background variant="lines" pattern-color="#94a3b8" :gap="20" :size="1" />
       <Controls />
       <MiniMap
+        pannable
+        zoomable
+        :width="240"
+        :height="180"
         :node-color="(n) => n.data?.color || '#6366f1'"
-        :mask-color="'rgba(240, 242, 246, 0.7)'"
+        mask-color="rgba(99, 102, 241, 0.2)"
+        mask-stroke-color="#6366f1"
+        :mask-stroke-width="3"
+        :mask-border-radius="6"
       />
 
       <template #node-custom="nodeProps">
@@ -142,13 +149,56 @@ function handleImport() {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
+  /* Graph-paper background */
+  background-color: #fafbfc;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+  /* Bold border */
+  border: 3px solid #c7d2fe;
+  border-radius: 14px;
+  margin: 10px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(99, 102, 241, 0.1),
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Top accent line */
+.flow-canvas::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa);
+  border-radius: 0 0 4px 4px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* Corner accents */
+.flow-canvas::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .canvas-toolbar {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 18px;
+  right: 18px;
   z-index: 10;
   display: flex;
   gap: 8px;
