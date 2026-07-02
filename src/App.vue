@@ -8,6 +8,7 @@ const navItems = [
   { path: '/', label: '首页', icon: '⌂' },
   { path: '/workflows', label: '工作流', icon: '⚙' },
   { path: '/lowcode', label: '大屏', icon: '▦' },
+  { path: '/ai', label: 'AI 助手', icon: '✦' },
 ]
 </script>
 
@@ -154,6 +155,14 @@ const navItems = [
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 确保 router-view 及 transition 撑满 */
+.app-main > div {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
 .page-fade-enter-active,

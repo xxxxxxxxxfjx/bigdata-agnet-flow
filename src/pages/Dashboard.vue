@@ -26,6 +26,17 @@ const platforms = [
     route: '/lowcode',
     btnLabel: '进入大屏',
   },
+  {
+    key: 'ai',
+    title: 'AI 智能助手',
+    subtitle: 'LLM Chat · DeepSeek Ready',
+    mark: 'AI',
+    color: '#6366f1',
+    description: '基于大语言模型的智能问答界面，支持 Markdown 渲染、代码高亮、KaTeX 公式、Mermaid 图表和思维导图。Mock 模式开箱即用，后期可无缝对接 DeepSeek API。',
+    features: ['代码高亮', '公式渲染', '思维导图', '图表生成'],
+    route: '/ai',
+    btnLabel: '进入 AI 助手',
+  },
 ]
 </script>
 

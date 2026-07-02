@@ -30,6 +30,12 @@ const routes = [
     component: () => import('../pages/LowCodeEditor.vue'),
     meta: { title: '可视化大屏' },
   },
+  {
+    path: '/ai',
+    name: 'AIAssistant',
+    component: () => import('../pages/AIAssistant.vue'),
+    meta: { title: 'AI 智能助手' },
+  },
 ]
 
 const router = createRouter({
