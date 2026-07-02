@@ -32,10 +32,13 @@ const props = defineProps({
 })
 
 // 对每个 text block 预计算渲染结果，Vue 自动做最小 DOM 更新
+// 流式期间（isStreaming=true）跳过 $...$ / $$...$$ 的 KaTeX 渲染，
+// 避免公式未闭合时部分解析成功/失败导致行高振荡
 const textHtmlMap = computed(() => {
   const map = {}
+  const skipFormulas = props.isStreaming
   for (const b of props.blocks) {
-    if (b.type === 'text') map[b.id] = renderMarkdown(b.content || '')
+    if (b.type === 'text') map[b.id] = renderMarkdown(b.content || '', { skipFormulas })
   }
   return map
 })

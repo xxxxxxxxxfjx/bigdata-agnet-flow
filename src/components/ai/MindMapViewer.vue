@@ -7,9 +7,12 @@
       <span>思维导图</span>
       <span v-if="status === 'streaming'" class="badge">生成中...</span>
       <span v-else-if="renderError" class="badge badge-error">渲染失败</span>
-      <span v-else class="hint">🖱️ 滚轮缩放 · 点击折叠</span>
+      <span v-else class="hint">🖱️ 滚轮缩放 · 拖拽平移 · 点击折叠</span>
       <div class="header-actions">
         <button class="hdr-btn" @click="download" title="下载图片" :disabled="!!renderError">⬇</button>
+        <button class="hdr-btn" @click="zoomIn" title="放大">➕</button>
+        <button class="hdr-btn" @click="zoomOut" title="缩小">➖</button>
+        <button class="hdr-btn" @click="resetZoom" title="重置">↺</button>
         <button class="hdr-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏'">{{ isFullscreen ? '✕' : '⛶' }}</button>
       </div>
     </div>
@@ -54,10 +57,10 @@ const COLORS = ['#6366f1','#8b5cf6','#a855f7','#d946ef','#ec4899','#f43f5e','#f9
 const OPTS = {
   autoFit: false, duration: 400, maxWidth: 280, paddingX: 16,
   initialExpandLevel: 99, colorFreezeLevel: 3, zoom: true, pan: true,
-  scrollForPan: true, toggleRecursively: true, nodeMinHeight: 36,
+  scrollForPan: false, toggleRecursively: true, nodeMinHeight: 36,
   spacingHorizontal: 60, spacingVertical: 12,
   lineWidth: () => 2,
-  color: (node) => COLORS[Math.min(node.depth, COLORS.length - 1)]
+  color: (node) => COLORS[Math.min(node.state?.depth ?? node.depth ?? 0, COLORS.length - 1)]
 }
 
 function createSvgElement(container) {
@@ -114,6 +117,20 @@ async function render() {
   }
 }
 
+// 缩放控制（与 MermaidBlock 行为一致）
+function zoomIn() {
+  if (!mm) return
+  try { mm.svg.transition().duration(200).call(mm.zoom.scaleBy, 1.3) } catch (_) {}
+}
+function zoomOut() {
+  if (!mm) return
+  try { mm.svg.transition().duration(200).call(mm.zoom.scaleBy, 0.7) } catch (_) {}
+}
+function resetZoom() {
+  if (!mm) return
+  try { mm.fit() } catch (_) {}
+}
+
 // 全屏切换：需要重新创建 SVG（尺寸变化）
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
@@ -150,13 +167,24 @@ async function download() {
   } catch (_) {}
 }
 
-// 增量渲染：监听 markdown 变化
-let timer = null, last = ''
+// 增量渲染：节流 throttle（每 200ms 最多渲染一次），保证流式过程中渐进呈现
+let timer = null, last = '', lastRenderTime = 0
+const THROTTLE_MS = 200
+
 function schedule() {
+  const now = Date.now()
+  const elapsed = now - lastRenderTime
   clearTimeout(timer)
-  timer = setTimeout(() => {
+
+  if (elapsed >= THROTTLE_MS) {
+    lastRenderTime = now
     if (props.markdown && props.markdown !== last) { last = props.markdown; render() }
-  }, 300)
+  } else {
+    timer = setTimeout(() => {
+      lastRenderTime = Date.now()
+      if (props.markdown && props.markdown !== last) { last = props.markdown; render() }
+    }, THROTTLE_MS - elapsed)
+  }
 }
 
 watch(() => props.markdown, (v) => { if (v) schedule() })

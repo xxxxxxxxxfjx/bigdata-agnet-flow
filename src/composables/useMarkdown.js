@@ -113,9 +113,11 @@ function renderBlockFormulas(html) {
 /**
  * 完整渲染 Markdown 文本（含 KaTeX 后处理）
  * @param {string} text - Markdown 文本
+ * @param {object} opts - 选项
+ * @param {boolean} [opts.skipFormulas=false] - 流式期间跳过公式渲染，避免部分解析导致高度振荡
  * @returns {string} HTML 字符串
  */
-export function renderMarkdown(text) {
+export function renderMarkdown(text, { skipFormulas = false } = {}) {
   if (!text) return ''
 
   // 1. marked 解析
@@ -125,9 +127,11 @@ export function renderMarkdown(text) {
   html = html.replace(/<table>/g, '<div class="table-wrapper"><table>')
   html = html.replace(/<\/table>/g, '</table></div>')
 
-  // 3. KaTeX 后处理
-  html = renderBlockFormulas(html)
-  html = renderInlineFormulas(html)
+  // 3. KaTeX 后处理 —— 流式期间跳过，避免 $...$ 未闭合时部分渲染导致高度振荡
+  if (!skipFormulas) {
+    html = renderBlockFormulas(html)
+    html = renderInlineFormulas(html)
+  }
 
   // 4. 包裹 .markdown-body 让 CSS 选择器生效
   html = `<div class="markdown-body">${html}</div>`
