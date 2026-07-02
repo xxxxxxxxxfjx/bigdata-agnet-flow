@@ -158,8 +158,7 @@ const navItems = [
 }
 
 /* 确保 router-view 及 transition 撑满 */
-.app-main > div {
-  display: flex;
+.app-main > :deep(div) {
   flex: 1;
   min-height: 0;
   width: 100%;

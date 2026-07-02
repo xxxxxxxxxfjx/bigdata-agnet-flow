@@ -14,6 +14,10 @@ import { useKeyboard } from '../composables/useKeyboard.js'
 import { useAlignGuide } from '../composables/useAlignGuide.js'
 import { SCREEN_TEMPLATES } from '../config/templates.js'
 
+const props = defineProps({
+  id: { type: String, default: '' },
+})
+
 const router = useRouter()
 const {
   components, selectedId, selectedIds, canvasStyle,
@@ -82,7 +86,11 @@ function startResize(type, e) {
 }
 
 onMounted(() => {
-  if (projects.value.length === 0) {
+  // If route has an id, load that project
+  if (props.id) {
+    localStorage.setItem('bigdata_agent_flow_current_project', props.id)
+    switchProject(props.id)
+  } else if (projects.value.length === 0) {
     createProject('销售运营分析大屏', 'bigscreen')
   } else if (currentProjectId.value) {
     switchProject(currentProjectId.value)
@@ -226,9 +234,10 @@ function loadTemplate(template) {
 function handleCreateProject() {
   if (!newProjectName.value.trim()) return
   saveCurrentProject()
-  createProject(newProjectName.value.trim(), 'bigscreen')
+  const p = createProject(newProjectName.value.trim(), 'bigscreen')
   clearHistory()
   newProjectName.value = ''
+  if (p) router.replace(`/lowcode/${p.id}`)
 }
 
 function handleSwitchProject(id) {
@@ -237,6 +246,7 @@ function handleSwitchProject(id) {
   snapshotBeforeMutate()
   switchProject(id)
   clearHistory()
+  router.replace(`/lowcode/${id}`)
 }
 
 function handleDeleteProject(id) {
@@ -268,7 +278,7 @@ function onComponentMutated() {
   <div class="lowcode-editor">
     <header class="workbench-header">
       <div class="header-left">
-        <button class="icon-action" title="返回首页" @click="router.push('/')">←</button>
+        <button class="icon-action" title="返回大屏列表" @click="router.push('/lowcode')">←</button>
         <div class="project-block">
           <button class="project-name" @click="showProjects = true">
             {{ currentProject?.name || '未命名仪表板' }}

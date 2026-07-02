@@ -111,9 +111,9 @@ h1 {
 }
 
 .platform-grid {
-  max-width: 920px;
+  max-width: 1060px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 18px;
   margin: 0 auto;
   padding: 18px 28px 48px;
@@ -194,7 +194,7 @@ h1 {
   font-weight: 800;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 700px) {
   .platform-grid {
     grid-template-columns: 1fr;
   }

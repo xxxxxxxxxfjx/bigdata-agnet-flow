@@ -26,9 +26,20 @@ const routes = [
   },
   {
     path: '/lowcode',
+    name: 'LowCodeList',
+    component: () => import('../pages/LowCodeList.vue'),
+    meta: { title: '可视化大屏列表' },
+  },
+  {
+    path: '/lowcode/:id',
     name: 'LowCode',
     component: () => import('../pages/LowCodeEditor.vue'),
-    meta: { title: '可视化大屏' },
+    meta: { title: '大屏编辑器' },
+    props: true,
+  },
+  {
+    path: '/lowcode-editor',
+    redirect: '/lowcode',
   },
   {
     path: '/ai',

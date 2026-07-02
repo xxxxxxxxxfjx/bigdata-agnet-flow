@@ -1,44 +1,61 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { WORKFLOW_TEMPLATES } from '../config/workflowTemplates.js'
+import { SCREEN_TEMPLATES } from '../config/templates.js'
 
 const router = useRouter()
-const workflows = ref([])
+const projects = ref([])
 const showNewDialog = ref(false)
-const newWorkflow = ref({ name: '', description: '', category: '通用' })
+const newProject = ref({ name: '', description: '', category: '经营分析' })
 
 // Filter & sort state
 const searchQuery = ref('')
 const activeCategory = ref('全部')
-const sortBy = ref('updatedAt') // 'updatedAt' | 'name' | 'nodeCount' | 'createdAt'
+const sortBy = ref('updatedAt')
 
-const STORAGE_KEY = 'bigdata_agent_flow_workflows'
+const STORAGE_KEY = 'bigdata_agent_flow_projects'
+const PROJECT_DATA_PREFIX = 'bigdata_agent_flow_project_'
 
 // Collect all unique categories
 const categories = computed(() => {
   const cats = new Set()
-  workflows.value.forEach((w) => cats.add(w.category))
+  projects.value.forEach((p) => cats.add(p.category))
   return ['全部', ...Array.from(cats).sort()]
 })
 
-// Filtered and sorted workflows
-const filteredWorkflows = computed(() => {
-  let result = [...workflows.value]
+// Parse canvas size from stored project data
+function getProjectMeta(id) {
+  try {
+    const key = PROJECT_DATA_PREFIX + id
+    const data = JSON.parse(localStorage.getItem(key))
+    if (data) {
+      return {
+        canvasWidth: data.canvasStyle?.width || 1920,
+        canvasHeight: data.canvasStyle?.height || 1080,
+        componentCount: data.components?.length || 0,
+      }
+    }
+  } catch { /* ignore */ }
+  return { canvasWidth: 1920, canvasHeight: 1080, componentCount: 0 }
+}
 
-  // Search filter: match name or description
+// Filtered and sorted projects
+const filteredProjects = computed(() => {
+  let result = [...projects.value]
+
+  // Search filter
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
-    result = result.filter((w) =>
-      w.name.toLowerCase().includes(q) ||
-      (w.description || '').toLowerCase().includes(q) ||
-      (w.category || '').toLowerCase().includes(q)
+    result = result.filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.category || '').toLowerCase().includes(q)
     )
   }
 
   // Category filter
   if (activeCategory.value !== '全部') {
-    result = result.filter((w) => w.category === activeCategory.value)
+    result = result.filter((p) => p.category === activeCategory.value)
   }
 
   // Sort
@@ -46,8 +63,8 @@ const filteredWorkflows = computed(() => {
     switch (sortBy.value) {
       case 'name':
         return a.name.localeCompare(b.name, 'zh-CN')
-      case 'nodeCount':
-        return (b.nodeCount || 0) - (a.nodeCount || 0)
+      case 'componentCount':
+        return (b.componentCount || 0) - (a.componentCount || 0)
       case 'createdAt':
         return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
       case 'updatedAt':
@@ -57,64 +74,68 @@ const filteredWorkflows = computed(() => {
   })
 
   // Templates first
-  const templates = result.filter((w) => w.isTemplate)
-  const user = result.filter((w) => !w.isTemplate)
+  const templates = result.filter((p) => p.isTemplate)
+  const user = result.filter((p) => !p.isTemplate)
   return [...templates, ...user]
 })
 
-function loadWorkflows() {
+function loadProjects() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
 
-    // Map templates
-    const templateIds = new Set(WORKFLOW_TEMPLATES.map((t) => t.id))
-    const templates = WORKFLOW_TEMPLATES.map((t) => ({
+    // Map templates from SCREEN_TEMPLATES
+    const templateIds = new Set(SCREEN_TEMPLATES.map((t) => t.id))
+    const templates = SCREEN_TEMPLATES.map((t) => ({
       id: t.id,
       name: t.name,
       description: t.description,
       category: t.category,
-      icon: t.icon || '⚡',
+      thumbnail: t.thumbnail || 'BI',
       isTemplate: true,
-      nodeCount: t.nodes?.length || 0,
+      componentCount: t.components?.length || 0,
+      canvasWidth: t.canvasStyle?.width || 1920,
+      canvasHeight: t.canvasStyle?.height || 1080,
       createdAt: '2024-06-15T08:00:00Z',
       updatedAt: '2024-07-01T10:30:00Z',
-      nodes: t.nodes,
-      edges: t.edges,
     }))
 
-    // Split user workflows: duplicates of templates vs. truly new ones
+    // Split user projects
     const editedTemplates = []
-    const pureUserWorkflows = []
+    const pureUserProjects = []
     const seenIds = new Set()
 
-    saved.forEach((w) => {
-      // Skip completely empty or corrupted entries
-      if (!w.id) return
-      // Dedup: first occurrence wins
-      if (seenIds.has(w.id)) return
-      seenIds.add(w.id)
+    saved.forEach((p) => {
+      if (!p.id) return
+      if (seenIds.has(p.id)) return
+      seenIds.add(p.id)
 
-      if (templateIds.has(w.id)) {
-        // User edited a template — show user version, mark as edited
-        editedTemplates.push({ ...w, isTemplate: false, isEditedTemplate: true })
+      // Enrich with canvas meta from stored project data
+      const meta = getProjectMeta(p.id)
+      const enriched = { ...p, ...meta }
+
+      if (templateIds.has(p.id)) {
+        editedTemplates.push({ ...enriched, isTemplate: false, isEditedTemplate: true })
       } else {
-        pureUserWorkflows.push({ ...w, isTemplate: false })
+        pureUserProjects.push({ ...enriched, isTemplate: false })
       }
     })
 
-    // Build final list:
-    // 1. Templates (skip those the user has edited — the edited version replaces them)
+    // Build final list: remaining templates + edited templates + user projects
     const remainingTemplates = templates.filter((t) => !seenIds.has(t.id))
-    // 2. Edited templates (user's versions of template workflows)
-    // 3. Pure user-created workflows
-    workflows.value = [...remainingTemplates, ...editedTemplates, ...pureUserWorkflows]
+    projects.value = [...remainingTemplates, ...editedTemplates, ...pureUserProjects]
   } catch {
-    workflows.value = WORKFLOW_TEMPLATES.map((t) => ({
-      id: t.id, name: t.name, description: t.description,
-      category: t.category, icon: t.icon || '⚡',
-      isTemplate: true, nodeCount: t.nodes?.length || 0,
-      createdAt: '2024-06-15T08:00:00Z', updatedAt: '2024-07-01T10:30:00Z',
-      nodes: t.nodes, edges: t.edges,
+    projects.value = SCREEN_TEMPLATES.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      category: t.category,
+      thumbnail: t.thumbnail || 'BI',
+      isTemplate: true,
+      componentCount: t.components?.length || 0,
+      canvasWidth: t.canvasStyle?.width || 1920,
+      canvasHeight: t.canvasStyle?.height || 1080,
+      createdAt: '2024-06-15T08:00:00Z',
+      updatedAt: '2024-07-01T10:30:00Z',
     }))
   }
 }
@@ -129,53 +150,92 @@ function clearFilters() {
   sortBy.value = 'updatedAt'
 }
 
-function saveWorkflows() {
-  const userWorkflows = workflows.value.filter((w) => !w.isTemplate)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(userWorkflows))
+function saveProjectsList() {
+  const userProjects = projects.value.filter((p) => !p.isTemplate)
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(userProjects))
 }
 
-function createWorkflow() {
-  if (!newWorkflow.value.name.trim()) return
-  const id = 'wf_' + Date.now()
+function createProject() {
+  if (!newProject.value.name.trim()) return
+  const id = 'proj_' + Date.now()
   const now = new Date().toISOString()
-  const wf = {
+  const proj = {
     id,
-    name: newWorkflow.value.name.trim(),
-    description: newWorkflow.value.description.trim(),
-    category: newWorkflow.value.category,
-    icon: '⚡',
-    nodeCount: 0,
-    nodes: [],
-    edges: [],
+    name: newProject.value.name.trim(),
+    description: newProject.value.description.trim(),
+    category: newProject.value.category,
+    type: 'bigscreen',
+    componentCount: 0,
+    canvasWidth: 1920,
+    canvasHeight: 1080,
     createdAt: now,
     updatedAt: now,
     isTemplate: false,
   }
-  workflows.value.push(wf)
-  saveWorkflows()
+  projects.value.push(proj)
+  saveProjectsList()
+
+  // Initialize empty project data
+  const key = PROJECT_DATA_PREFIX + id
+  localStorage.setItem(key, JSON.stringify({
+    components: [],
+    canvasStyle: { width: 1920, height: 1080, background: '#0f172a', scaleMode: 'full', gridSize: 10, showGrid: true },
+  }))
+
   showNewDialog.value = false
-  newWorkflow.value = { name: '', description: '', category: '通用' }
+  newProject.value = { name: '', description: '', category: '经营分析' }
   // Enter editor
-  router.push(`/workflow/${id}`)
+  router.push(`/lowcode/${id}`)
 }
 
-function deleteWorkflow(id) {
-  if (!confirm('确定要删除此工作流吗？')) return
-  workflows.value = workflows.value.filter((w) => w.id !== id)
-  saveWorkflows()
+function deleteProject(id) {
+  if (!confirm('确定要删除此大屏项目吗？')) return
+  // Remove project data
+  const key = PROJECT_DATA_PREFIX + id
+  localStorage.removeItem(key)
+  // Remove from list
+  projects.value = projects.value.filter((p) => p.id !== id)
+  saveProjectsList()
 }
 
-function enterWorkflow(wf) {
-  // Save workflow data into localStorage so editor can load it
-  const data = {
-    id: wf.id,
-    name: wf.name,
-    nodes: wf.nodes || [],
-    edges: wf.edges || [],
-    isTemplate: wf.isTemplate || false,
+function enterEditor(proj) {
+  // For templates, create a copy first
+  if (proj.isTemplate) {
+    const template = SCREEN_TEMPLATES.find((t) => t.id === proj.id)
+    if (!template) return
+
+    const id = 'proj_' + Date.now()
+    const now = new Date().toISOString()
+    const newProj = {
+      id,
+      name: proj.name + ' (副本)',
+      description: proj.description,
+      category: proj.category,
+      type: 'bigscreen',
+      componentCount: proj.componentCount,
+      canvasWidth: proj.canvasWidth,
+      canvasHeight: proj.canvasHeight,
+      createdAt: now,
+      updatedAt: now,
+      isTemplate: false,
+    }
+    projects.value.push(newProj)
+    saveProjectsList()
+
+    // Copy template data
+    const key = PROJECT_DATA_PREFIX + id
+    localStorage.setItem(key, JSON.stringify({
+      components: template.components || [],
+      canvasStyle: template.canvasStyle || { width: 1920, height: 1080, background: '#0f172a', gridSize: 10, showGrid: true },
+    }))
+
+    router.push(`/lowcode/${id}`)
+    return
   }
-  localStorage.setItem('bigdata_agent_flow_current_workflow', JSON.stringify(data))
-  router.push(`/workflow/${wf.id}`)
+
+  // Save current project ID for the editor
+  localStorage.setItem('bigdata_agent_flow_current_project', proj.id)
+  router.push(`/lowcode/${proj.id}`)
 }
 
 function formatDate(iso) {
@@ -185,33 +245,35 @@ function formatDate(iso) {
 
 function categoryColor(cat) {
   const map = {
-    '数据处理': '#3b82f6', 'AI Agent': '#8b5cf6', '实时计算': '#06b6d4',
-    'AI/ML': '#ec4899', '通用': '#64748b',
+    '经营分析': '#3b82f6',
+    '政务': '#8b5cf6',
+    '工业': '#06b6d4',
+    '通用': '#64748b',
   }
   return map[cat] || '#94a3b8'
 }
 
-onMounted(loadWorkflows)
+onMounted(loadProjects)
 </script>
 
 <template>
-  <div class="workflow-list-page">
+  <div class="lowcode-list-page">
     <!-- Header -->
     <div class="page-header">
       <div class="header-left">
         <button class="back-btn" @click="router.push('/')">← 首页</button>
         <div class="header-title">
-          <h1>⚡ 工作流编排</h1>
+          <h1>▦ 可视化大屏</h1>
           <span class="header-sub">
-            共 {{ filteredWorkflows.length }} 个工作流
+            共 {{ filteredProjects.length }} 个大屏项目
             <template v-if="searchQuery || activeCategory !== '全部'">
-              / 总计 {{ workflows.length }}
+              / 总计 {{ projects.length }}
             </template>
           </span>
         </div>
       </div>
       <button class="create-btn" @click="showNewDialog = true">
-        + 新建工作流
+        + 新建大屏
       </button>
     </div>
 
@@ -223,7 +285,7 @@ onMounted(loadWorkflows)
           v-model="searchQuery"
           type="text"
           class="search-input"
-          placeholder="搜索工作流名称、描述、分类..."
+          placeholder="搜索大屏名称、描述、分类..."
         />
         <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</button>
       </div>
@@ -231,7 +293,7 @@ onMounted(loadWorkflows)
         <option value="updatedAt">最近更新</option>
         <option value="createdAt">最近创建</option>
         <option value="name">名称排序</option>
-        <option value="nodeCount">节点数量</option>
+        <option value="componentCount">组件数量</option>
       </select>
       <span class="filter-divider"></span>
       <div class="filter-tags">
@@ -252,50 +314,53 @@ onMounted(loadWorkflows)
 
     <!-- Filter stats -->
     <div class="filter-stats">
-      <span>共 <strong>{{ filteredWorkflows.length }}</strong> 个工作流</span>
+      <span>共 <strong>{{ filteredProjects.length }}</strong> 个大屏项目</span>
       <span v-if="searchQuery || activeCategory !== '全部'" class="filter-active-hint">
-        （已筛选，共 {{ workflows.length }} 个）
+        （已筛选，共 {{ projects.length }} 个）
       </span>
     </div>
 
-    <!-- Workflow grid -->
-    <div v-if="filteredWorkflows.length > 0" class="workflow-grid">
+    <!-- Project grid -->
+    <div v-if="filteredProjects.length > 0" class="project-grid">
       <div
-        v-for="wf in filteredWorkflows"
-        :key="wf.id"
-        class="wf-card"
-        @click="enterWorkflow(wf)"
+        v-for="proj in filteredProjects"
+        :key="proj.id"
+        class="proj-card"
+        @click="enterEditor(proj)"
       >
         <!-- Card top accent -->
-        <div class="card-accent" :style="{ background: categoryColor(wf.category) }"></div>
+        <div class="card-accent" :style="{ background: categoryColor(proj.category) }"></div>
 
         <!-- Card body -->
         <div class="card-body">
-          <div class="card-icon">{{ wf.icon || '⚡' }}</div>
+          <div class="card-thumb">{{ proj.thumbnail || '▦' }}</div>
           <div class="card-info">
-            <h3 class="card-name">{{ wf.name }}</h3>
-            <p class="card-desc">{{ wf.description }}</p>
+            <h3 class="card-name">{{ proj.name }}</h3>
+            <p class="card-desc">{{ proj.description }}</p>
           </div>
         </div>
 
         <!-- Card footer -->
         <div class="card-footer">
-          <span class="card-category" :style="{ color: categoryColor(wf.category), background: categoryColor(wf.category) + '15' }">
-            {{ wf.category }}
+          <span class="card-category" :style="{ color: categoryColor(proj.category), background: categoryColor(proj.category) + '15' }">
+            {{ proj.category }}
           </span>
           <div class="card-meta">
-            <span class="meta-item" v-if="wf.nodeCount > 0">
-              {{ wf.nodeCount }} 个节点
+            <span class="meta-item" v-if="proj.componentCount > 0">
+              {{ proj.componentCount }} 个组件
             </span>
-            <span class="meta-item" v-if="wf.isTemplate">📋 模板</span>
-            <span class="meta-item edited-tag" v-if="wf.isEditedTemplate">✏️ 已编辑</span>
-            <span class="meta-item">{{ formatDate(wf.updatedAt) }}</span>
+            <span class="meta-item" v-if="proj.canvasWidth && proj.canvasHeight">
+              {{ proj.canvasWidth }}×{{ proj.canvasHeight }}
+            </span>
+            <span class="meta-item" v-if="proj.isTemplate">📋 模板</span>
+            <span class="meta-item edited-tag" v-if="proj.isEditedTemplate">✏️ 已编辑</span>
+            <span class="meta-item">{{ formatDate(proj.updatedAt) }}</span>
           </div>
           <div class="card-actions" @click.stop>
             <button
-              v-if="!wf.isTemplate"
+              v-if="!proj.isTemplate"
               class="card-action-btn danger"
-              @click="deleteWorkflow(wf.id)"
+              @click="deleteProject(proj.id)"
               title="删除"
             >🗑️</button>
           </div>
@@ -303,60 +368,59 @@ onMounted(loadWorkflows)
       </div>
     </div>
 
-    <!-- No results (filters active but nothing matches) -->
-    <div v-if="filteredWorkflows.length === 0 && workflows.length > 0" class="empty-state">
+    <!-- Empty state (filters active, nothing matches) -->
+    <div v-if="filteredProjects.length === 0 && projects.length > 0" class="empty-state">
       <div class="empty-icon">🔍</div>
-      <h3>未找到匹配的工作流</h3>
+      <h3>未找到匹配的大屏项目</h3>
       <p>尝试调整搜索条件或筛选分类</p>
       <button class="clear-filter-btn" @click="clearFilters">清除所有筛选</button>
     </div>
 
-    <!-- Empty state (no workflows at all) -->
-    <div v-if="workflows.length === 0" class="empty-state">
-      <div class="empty-icon">⚡</div>
-      <h3>暂无工作流</h3>
-      <p>点击"新建工作流"开始创建你的第一个 Agent 工作流</p>
+    <!-- Empty state (no projects at all) -->
+    <div v-if="projects.length === 0" class="empty-state">
+      <div class="empty-icon">▦</div>
+      <h3>暂无大屏项目</h3>
+      <p>点击"新建大屏"开始创建你的第一个可视化大屏</p>
     </div>
 
-    <!-- New workflow dialog -->
+    <!-- New project dialog -->
     <div v-if="showNewDialog" class="dialog-overlay" @click.self="showNewDialog = false">
       <div class="dialog-panel">
-        <h3>新建工作流</h3>
+        <h3>新建大屏项目</h3>
         <div class="dialog-body">
           <div class="field">
             <label class="field-label">名称 *</label>
             <input
-              v-model="newWorkflow.name"
+              v-model="newProject.name"
               type="text"
               class="field-input"
-              placeholder="输入工作流名称..."
-              @keyup.enter="createWorkflow"
+              placeholder="输入大屏项目名称..."
+              @keyup.enter="createProject"
               autofocus
             />
           </div>
           <div class="field">
             <label class="field-label">描述</label>
             <textarea
-              v-model="newWorkflow.description"
+              v-model="newProject.description"
               class="field-textarea"
-              placeholder="简要描述此工作流的用途..."
+              placeholder="简要描述此大屏的用途..."
               rows="3"
             ></textarea>
           </div>
           <div class="field">
             <label class="field-label">分类</label>
-            <select v-model="newWorkflow.category" class="field-input">
+            <select v-model="newProject.category" class="field-input">
+              <option value="经营分析">经营分析</option>
+              <option value="政务">政务</option>
+              <option value="工业">工业</option>
               <option value="通用">通用</option>
-              <option value="数据处理">数据处理</option>
-              <option value="AI Agent">AI Agent</option>
-              <option value="实时计算">实时计算</option>
-              <option value="AI/ML">AI/ML</option>
             </select>
           </div>
         </div>
         <div class="dialog-footer">
           <button class="dialog-btn cancel" @click="showNewDialog = false">取消</button>
-          <button class="dialog-btn primary" @click="createWorkflow" :disabled="!newWorkflow.name.trim()">
+          <button class="dialog-btn primary" @click="createProject" :disabled="!newProject.name.trim()">
             创建并进入编辑
           </button>
         </div>
@@ -366,7 +430,7 @@ onMounted(loadWorkflows)
 </template>
 
 <style scoped>
-.workflow-list-page {
+.lowcode-list-page {
   flex: 1;
   overflow-y: auto;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
@@ -385,11 +449,11 @@ onMounted(loadWorkflows)
 
 .back-btn {
   display: flex; align-items: center; gap: 5px; padding: 7px 14px;
-  font-size: 13px; font-weight: 500; color: #6366f1; background: #eef2ff;
+  font-size: 13px; font-weight: 500; color: #0f766e; background: #f0fdfa;
   border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;
   margin-top: 6px;
 }
-.back-btn:hover { background: #e0e7ff; }
+.back-btn:hover { background: #ccfbf1; }
 
 .header-title h1 { margin: 0; font-size: 24px; font-weight: 800; color: #1e293b; }
 .header-sub { font-size: 13px; color: #94a3b8; margin-top: 2px; display: block; }
@@ -397,11 +461,11 @@ onMounted(loadWorkflows)
 .create-btn {
   display: flex; align-items: center; gap: 6px; padding: 10px 20px;
   font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  box-shadow: 0 4px 12px rgba(99,102,241,0.3); cursor: pointer;
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  box-shadow: 0 4px 12px rgba(15,118,110,0.3); cursor: pointer;
   transition: all 0.2s;
 }
-.create-btn:hover { box-shadow: 0 6px 20px rgba(99,102,241,0.4); transform: translateY(-1px); }
+.create-btn:hover { box-shadow: 0 6px 20px rgba(15,118,110,0.4); transform: translateY(-1px); }
 
 /* Filter bar */
 .filter-bar {
@@ -419,7 +483,7 @@ onMounted(loadWorkflows)
   border: 1.5px solid #e2e8f0; border-radius: 8px; outline: none;
   background: #fafbfc;
 }
-.search-input:focus { border-color: #6366f1; }
+.search-input:focus { border-color: #0f766e; }
 .search-clear {
   position: absolute; right: 8px; background: #cbd5e1; border: none;
   color: #fff; width: 18px; height: 18px; border-radius: 50%;
@@ -433,7 +497,7 @@ onMounted(loadWorkflows)
   background: #fafbfc; border: 1.5px solid #e2e8f0; border-radius: 8px;
   outline: none; cursor: pointer;
 }
-.sort-select:focus { border-color: #6366f1; }
+.sort-select:focus { border-color: #0f766e; }
 
 .filter-divider { width: 1px; height: 24px; background: #e2e8f0; }
 
@@ -445,7 +509,7 @@ onMounted(loadWorkflows)
 }
 .filter-tag:hover { background: #e2e8f0; border-color: #cbd5e1; }
 .filter-tag.active {
-  background: #eef2ff; color: #6366f1; border-color: #c7d2fe;
+  background: #f0fdfa; color: #0f766e; border-color: #99f6e4;
   font-weight: 600;
 }
 
@@ -465,25 +529,31 @@ onMounted(loadWorkflows)
 .filter-active-hint { color: #94a3b8; font-size: 12px; }
 
 /* Grid */
-.workflow-grid {
+.project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 20px;
 }
 
 /* Card */
-.wf-card {
+.proj-card {
   background: #fff; border-radius: 14px; border: 1.5px solid #e2e8f0;
   overflow: hidden; cursor: pointer;
   transition: all 0.25s ease; position: relative;
 }
-.wf-card:hover {
-  border-color: #c7d2fe; box-shadow: 0 8px 28px rgba(0,0,0,0.1);
+.proj-card:hover {
+  border-color: #99f6e4; box-shadow: 0 8px 28px rgba(0,0,0,0.1);
   transform: translateY(-3px);
 }
 .card-accent { height: 4px; }
 .card-body { display: flex; gap: 14px; padding: 20px 20px 12px; }
-.card-icon { font-size: 36px; line-height: 1; flex-shrink: 0; }
+.card-thumb {
+  font-size: 36px; line-height: 1; flex-shrink: 0;
+  width: 52px; height: 52px; display: flex; align-items: center;
+  justify-content: center; border-radius: 10px;
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+  color: #0f766e;
+}
 .card-info { flex: 1; min-width: 0; }
 .card-name { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #1e293b; }
 .card-desc { margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;
@@ -507,7 +577,7 @@ onMounted(loadWorkflows)
   padding: 4px 8px; cursor: pointer; font-size: 14px; opacity: 0;
   transition: all 0.15s;
 }
-.wf-card:hover .card-action-btn { opacity: 1; }
+.proj-card:hover .card-action-btn { opacity: 1; }
 .card-action-btn:hover { background: #fef2f2; border-color: #f87171; }
 
 /* Empty */
@@ -534,13 +604,13 @@ onMounted(loadWorkflows)
   width: 100%; padding: 9px 12px; font-size: 13px; border: 1.5px solid #e2e8f0;
   border-radius: 8px; outline: none; box-sizing: border-box;
 }
-.field-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.field-input:focus { border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,0.1); }
 .field-textarea {
   width: 100%; padding: 9px 12px; font-size: 13px; border: 1.5px solid #e2e8f0;
   border-radius: 8px; outline: none; resize: vertical; box-sizing: border-box;
   font-family: inherit;
 }
-.field-textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+.field-textarea:focus { border-color: #0f766e; box-shadow: 0 0 0 3px rgba(15,118,110,0.1); }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .dialog-btn {
   padding: 9px 20px; font-size: 13px; font-weight: 600; border: none; border-radius: 8px;
@@ -548,7 +618,7 @@ onMounted(loadWorkflows)
 }
 .dialog-btn.cancel { background: #f1f5f9; color: #475569; }
 .dialog-btn.cancel:hover { background: #e2e8f0; }
-.dialog-btn.primary { background: #6366f1; color: #fff; }
-.dialog-btn.primary:hover:not(:disabled) { background: #4f46e5; }
+.dialog-btn.primary { background: #0f766e; color: #fff; }
+.dialog-btn.primary:hover:not(:disabled) { background: #115e59; }
 .dialog-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
