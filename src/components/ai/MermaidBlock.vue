@@ -111,9 +111,10 @@ onBeforeUnmount(() => clearInterval(timer))
 .mermaid-body { height: 460px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; cursor: grab; user-select: none; }
 .fullscreen .mermaid-body { height: calc(100vh - 42px); }
 .mermaid-body:active { cursor: grabbing; }
-.mermaid-svg-area { transform-origin: center; transition: transform 0.05s; }
-.mermaid-svg-area :deep(svg) { max-height: 420px; width: auto; height: auto; }
-.fullscreen .mermaid-svg-area :deep(svg) { max-height: calc(100vh - 80px); }
+/* 关键修复：给 mermaid-svg-area 确定宽度，否则 Mermaid SVG 的 max-width:100% 塌陷为 0 */
+.mermaid-svg-area { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform-origin: center; transition: transform 0.05s; }
+.mermaid-svg-area :deep(svg) { max-width: 100% !important; max-height: 420px; width: auto !important; height: auto !important; }
+.fullscreen .mermaid-svg-area :deep(svg) { max-height: calc(100vh - 80px) !important; }
 .mermaid-code { width: 100%; height: 100%; overflow: auto; padding: 14px; }
 .mermaid-code pre { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #334155; white-space: pre-wrap; margin: 0; }
 .mermaid-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: #94a3b8; font-size: 13px; z-index: 1; }

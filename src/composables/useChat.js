@@ -368,7 +368,7 @@ function handleSSEEvent(event, assistantMsg, textBlockRenderedLength) {
       break
     }
 
-    // ===== 思维导图（markdown 文本） =====
+    // ===== 思维导图（节点树 + markdown 双存） =====
     case 'mindmap_start': {
       finishLastTextBlock(assistantMsg)
       assistantMsg.blocks.push({
@@ -376,13 +376,15 @@ function handleSSEEvent(event, assistantMsg, textBlockRenderedLength) {
         type: 'mindmap',
         status: 'streaming',
         rootTitle: payload.rootTitle || '思维导图',
+        nodeTree: { content: payload.rootTitle || '思维导图', children: [] },
         markdown: `# ${payload.rootTitle || '思维导图'}\n`
       })
       break
     }
     case 'mindmap_delta': {
       const block = findBlock(assistantMsg, payload.blockId, 'mindmap', 'streaming')
-      if (block) block.markdown += (payload.delta || '')
+      if (!block) break
+      block.markdown += (payload.delta || '')
       break
     }
     case 'mindmap_end': {

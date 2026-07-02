@@ -52,6 +52,7 @@ function chunkSize(t) {
     case 'text_delta':     return 4
     case 'code_delta':     return 15
     case 'formula_delta':  return 5
+    case 'mindmap_delta':  return 20
     case 'mermaid_delta':  return 15
     default:               return 5
   }
@@ -63,6 +64,7 @@ function chunkDelay(t) {
     case 'text_delta':     return 22
     case 'code_delta':     return 12
     case 'formula_delta':  return 18
+    case 'mindmap_delta':  return 20
     case 'mermaid_delta':  return 30
     default:               return 15
   }

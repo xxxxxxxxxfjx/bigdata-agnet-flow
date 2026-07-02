@@ -10,7 +10,7 @@
       <!-- 公式 -->
       <KaTeXFormula v-else-if="block.type === 'formula'" :formula="block.formula" :display-mode="block.displayMode !== false" />
       <!-- 思维导图 -->
-      <MindMapViewer v-else-if="block.type === 'mindmap'" :markdown="block.markdown" :root-title="block.rootTitle" :status="block.status" />
+      <MindMapViewer v-else-if="block.type === 'mindmap'" :markdown="block.markdown" :node-tree="block.nodeTree" :root-title="block.rootTitle" :status="block.status" />
       <!-- Mermaid -->
       <MermaidBlock v-else-if="block.type === 'mermaid'" :code="block.code" :status="block.status" />
     </template>
